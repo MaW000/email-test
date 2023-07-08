@@ -5,7 +5,8 @@ import {
   type NextAuthOptions,
   type DefaultSession,
 } from "next-auth";
-import DiscordProvider from "next-auth/providers/discord";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { z } from "zod";
 import { env } from "~/env.mjs";
 import { prisma } from "~/server/db";
 
@@ -37,19 +38,48 @@ declare module "next-auth" {
  */
 export const authOptions: NextAuthOptions = {
   callbacks: {
-    session: ({ session, user }) => ({
-      ...session,
-      user: {
-        ...session.user,
-        id: user.id,
-      },
-    }),
+    session({ session, user }) {
+      return session;
+    },
+  },
+  session: {
+    strategy: "jwt",
+  },
+  pages: {
+    signIn: "/auth/signin",
   },
   adapter: PrismaAdapter(prisma),
   providers: [
-    DiscordProvider({
-      clientId: env.DISCORD_CLIENT_ID,
-      clientSecret: env.DISCORD_CLIENT_SECRET,
+    CredentialsProvider({
+      credentials: {
+        username: {
+          label: "Email",
+          type: "text",
+          placeholder: "Your email",
+        },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const Credentials = z.object({
+          email: z.string().email(),
+          password: z.string(),
+        });
+        console.log(credentials, "a");
+        const parsedCredentials = Credentials.parse(credentials);
+
+        const user = await prisma.user.findUnique({
+          where: {
+            email: "mwardlow0@gmail.com",
+          },
+        });
+
+        if (!user) return null;
+
+        // compare hashed+stored password to entered password
+
+        // user logged in, return session
+        return user;
+      },
     }),
     /**
      * ...add more providers here.
